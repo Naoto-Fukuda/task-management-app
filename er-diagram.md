@@ -1,4 +1,3 @@
-
 ```mermaid
 erDiagram
   Tasks ||--o{ TaskTags : ""
@@ -21,5 +20,4 @@ erDiagram
     string task_id FK "タスクID"
     string tag_id FK "タグID"
   }
-
 ```
