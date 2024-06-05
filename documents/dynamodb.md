@@ -2,7 +2,7 @@
 
 | PartionKey | Attributes |||||
 |:-:|:-|:-|:-|:-|:-|
-| TaskId | TaskName | Title| Description | Status|Tags|
+| id | TaskName | Title| Description | Status|Tags|
 | {TaskId} | {TaskName} | {Title} | {Description} | {Status} | {TagName1, ...} |
 | ... | ... | ... | ... | ... | ... |
 
@@ -18,7 +18,7 @@ GetItemやQueryがEventIdにしか使えず、それ以外の属性で検索し�
 | PrimaryKey | Attributes |||||
 |:-:|:-|:-|:-|:-|:-|
 | PartitionKey |GSI-1-PK|GSI-2-PK|GSI-3-PK|GSI-4-PK|GSI-5-PK|
-| TaskId | TaskName | Title| Description | Status|Tags|
+| id | TaskName | Title| Description | Status|Tags|
 |||||
 | {TaskId} | {TaskName} | {Title} | {Description} | {Status} | {TagName1, ...} |
 | ... | ... | ... | ... | ... | ... |
