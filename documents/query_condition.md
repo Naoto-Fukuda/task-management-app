@@ -1,6 +1,6 @@
 | # | Entity | UseCase | Parameters | Table/Index | API & Key Conditions |
 |:-:|:-:|:-:|:-:|:-:|:-:|
-|1|Tasks|createTask|{task}|Table|PutItem|
+|1|Tasks|createTask|{task}|Table|Query on PK|
 |2|Tasks|getTaskById|{taskId}|Table|GetItem(PK = :taskId)|
 |3|Tasks|getTasks||Table|Query on PK|
 |4|Tasks|updateTaskById|{taskId}|Table|UpdateItem|
