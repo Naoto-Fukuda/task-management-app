@@ -32,28 +32,23 @@ type Task struct {
 	DataValue   string   `json:"DataValue,omitempty"`
 }
 
-func getTaskById(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	id := request.QueryStringParameters["id"]
-
-	// Query APIを使用して複数のアイテムを取得
+func fetchTasksById(id string) (map[string]*Task, error) {
 	input := &dynamodb.QueryInput{
-			TableName: aws.String(tableName),
-			KeyConditionExpression: aws.String("id = :id"), // Where句のパラメータ
-			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{ 
-					":id": {
-							S: aws.String(id),
-					},
+		TableName:              aws.String(tableName),
+		KeyConditionExpression: aws.String("id = :id"),
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":id": {
+				S: aws.String(id),
 			},
+		},
 	}
 
-	// DynamoDBクライアントの呼び出し
 	result, err := svc.Query(input)
 	if err != nil {
-		return events.APIGatewayProxyResponse{}, err
+		return nil, err
 	}
-	
-	taskMap := make(map[string]*Task)
 
+	taskMap := make(map[string]*Task)
 	for _, i := range result.Items {
 		id := *i["id"].S
 		if _, exists := taskMap[id]; !exists {
@@ -75,8 +70,20 @@ func getTaskById(request events.APIGatewayProxyRequest) (events.APIGatewayProxyR
 			task.Tags = append(task.Tags, *i["dataValue"].S)
 		}
 	}
+	return taskMap, nil
+}
 
-	// 結果をリストに変換
+func getTaskById(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	id := request.QueryStringParameters["id"]
+
+	taskMap, err := fetchTasksById(id)
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			StatusCode: http.StatusInternalServerError,
+			Body:       fmt.Sprintf("Failed to fetch tasks: %v", err),
+		}, nil
+	}
+
 	tasks := make([]Task, 0, len(taskMap))
 	for _, task := range taskMap {
 		tasks = append(tasks, *task)
@@ -84,7 +91,10 @@ func getTaskById(request events.APIGatewayProxyRequest) (events.APIGatewayProxyR
 
 	response, err := json.Marshal(tasks)
 	if err != nil {
-		return events.APIGatewayProxyResponse{}, err
+		return events.APIGatewayProxyResponse{
+			StatusCode: http.StatusInternalServerError,
+			Body:       fmt.Sprintf("Failed to marshal tasks: %v", err),
+		}, nil
 	}
 
 	return events.APIGatewayProxyResponse{
@@ -94,12 +104,69 @@ func getTaskById(request events.APIGatewayProxyRequest) (events.APIGatewayProxyR
 }
 
 // func getTasks(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-
 // }
 //
-//	func getTasksByTitle(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-//		title := request.QueryStringParameters["title"]
-//	}
+func getTasksByTitle(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	title := request.QueryStringParameters["title"]
+
+	// Titleに基づいてタスクIDを取得
+	input := &dynamodb.QueryInput{
+		TableName:              aws.String(tableName),
+		IndexName:              aws.String("GSI1"),
+		KeyConditionExpression: aws.String("dataType = :dataType AND dataValue = :dataValue"),
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":dataType": {
+				S: aws.String("Title"),
+			},
+			":dataValue": {
+				S: aws.String(title),
+			},
+		},
+	}
+
+	result, err := svc.Query(input)
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			StatusCode: http.StatusInternalServerError,
+			Body:       fmt.Sprintf("Query failed: %v", err),
+		}, nil
+	}
+
+	taskMap := make(map[string]*Task)
+	for _, v := range result.Items {
+		id := *v["id"].S
+		detailTaskMap, err := fetchTasksById(id)
+		if err != nil {
+			return events.APIGatewayProxyResponse{
+				StatusCode: http.StatusInternalServerError,
+				Body:       fmt.Sprintf("Detail query failed: %v", err),
+			}, nil
+		}
+
+		for key, value := range detailTaskMap {
+			taskMap[key] = value
+		}
+	}
+
+	tasks := make([]Task, 0, len(taskMap))
+	for _, task := range taskMap {
+		tasks = append(tasks, *task)
+	}
+
+	response, err := json.Marshal(tasks)
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			StatusCode: http.StatusInternalServerError,
+			Body:       fmt.Sprintf("Failed to marshal response: %v", err),
+		}, nil
+	}
+
+	return events.APIGatewayProxyResponse{
+		StatusCode: http.StatusOK,
+		Body:       string(response),
+	}, nil
+}
+
 //
 //	func getTasksByDescription(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 //		description := request.QueryStringParameters["description"]
@@ -112,6 +179,7 @@ func getTaskById(request events.APIGatewayProxyRequest) (events.APIGatewayProxyR
 //	func getTasksByTag(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 //		tag := request.QueryStringParameters["tag"]
 //	}
+
 func createTask(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	task := Task{}
 	err := json.Unmarshal([]byte(request.Body), &task)
@@ -174,6 +242,7 @@ func createTask(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRe
 //		taskId := request.QueryStringParameters["id"]
 //		tag := request.QueryStringParameters["tag"]
 //	}
+
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	method := request.HTTPMethod
 	switch method {

@@ -6,10 +6,10 @@ import (
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/stretchr/testify/mock"
-	"github.com/aws/aws-sdk-go/aws"
 )
 
 // DynamoDBAPIのモック定義
@@ -68,7 +68,7 @@ func Test_createTask(t *testing.T) {
 			name: "Valid Request",
 			args: args{
 				request: events.APIGatewayProxyRequest{
-					Body: "{\"id\":\"1\", \"dataType\":\"Description\", \"dataValue\":\"Task Title\"}",
+					Body:       "{\"id\":\"1\", \"dataType\":\"Description\", \"dataValue\":\"Task Title\"}",
 					HTTPMethod: "POST",
 				},
 			},
@@ -97,57 +97,97 @@ func Test_getTasksById(t *testing.T) {
 	// DynamoDBのモッククライアントを作成
 	mockSvc := &mockDynamoDBClient{}
 	mockSvc.On("Query", mock.Anything).Return(&dynamodb.QueryOutput{
-			Items: []map[string]*dynamodb.AttributeValue{
-					{
-							"id": {S: aws.String("1")},
-							"dataType": {S: aws.String("Title")},
-							"dataValue": {S: aws.String("Task Title")},
-					},
-					{
-						"id": {S: aws.String("1")},
-						"dataType": {S: aws.String("Description")},
-						"dataValue": {S: aws.String("Description of the task")},
-				},
+		Items: []map[string]*dynamodb.AttributeValue{
+			{
+				"id":        {S: aws.String("1")},
+				"dataType":  {S: aws.String("Title")},
+				"dataValue": {S: aws.String("Task Title")},
 			},
+			{
+				"id":        {S: aws.String("1")},
+				"dataType":  {S: aws.String("Description")},
+				"dataValue": {S: aws.String("Description of the task")},
+			},
+		},
 	}, nil)
 
 	svc = mockSvc
 
 	type args struct {
-			request events.APIGatewayProxyRequest
+		request events.APIGatewayProxyRequest
 	}
 	tests := []struct {
-			name    string
-			args    args
-			want    events.APIGatewayProxyResponse
-			wantErr bool
+		name    string
+		args    args
+		want    events.APIGatewayProxyResponse
+		wantErr bool
 	}{
-			{
-					name: "Valid ID",
-					args: args{
-							request: events.APIGatewayProxyRequest{
-									QueryStringParameters: map[string]string{"id": "1"},
-									HTTPMethod: "GET",
-							},
-					},
-					want: events.APIGatewayProxyResponse{
-							Body:       "[{\"id\":\"1\",\"title\":\"Task Title\",\"description\":\"Description of the task\"}]",
-							StatusCode: http.StatusOK,
-					},
-					wantErr: false,
+		{
+			name: "Valid ID",
+			args: args{
+				request: events.APIGatewayProxyRequest{
+					QueryStringParameters: map[string]string{"id": "1"},
+					HTTPMethod:            "GET",
+				},
 			},
+			want: events.APIGatewayProxyResponse{
+				Body:       "[{\"id\":\"1\",\"title\":\"Task Title\",\"description\":\"Description of the task\"}]",
+				StatusCode: http.StatusOK,
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-					got, err := getTaskById(tt.args.request)
-					if (err != nil) != tt.wantErr {
-							t.Errorf("getTasksById() error = %v, wantErr %v", err, tt.wantErr)
-							return
-					}
-					if !reflect.DeepEqual(got, tt.want) {
-							t.Errorf("getTasksById() = %v, want %v", got, tt.want)
-					}
-			})
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getTaskById(tt.args.request)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getTasksById() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getTasksById() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_getTasksByTitle(t *testing.T) {
+		// DynamoDBのモッククライアントを作成
+		mockSvc := &mockDynamoDBClient{}
+		mockSvc.On("Query", mock.Anything).Return(&dynamodb.QueryOutput{
+			Items: []map[string]*dynamodb.AttributeValue{
+				{
+					"id":        {S: aws.String("1")},
+				},
+				{
+					"id":        {S: aws.String("2")},
+				},
+			},
+		}, nil)
+	
+		svc = mockSvc
+	type args struct {
+		request events.APIGatewayProxyRequest
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    events.APIGatewayProxyResponse
+		wantErr bool
+	}{
+
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getTasksByTitle(tt.args.request)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getTasksByTitle() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getTasksByTitle() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
