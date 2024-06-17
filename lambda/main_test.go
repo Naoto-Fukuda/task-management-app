@@ -181,193 +181,6 @@ func Test_getTaskById(t *testing.T) {
 	}
 }
 
-func Test_getTasksByTitle(t *testing.T) {
-	// DynamoDBのモッククライアントを作成
-	mockSvc := &mockDynamoDBClient{}
-	mockSvc.On("Query", mock.Anything).Return(&dynamodb.QueryOutput{
-		Items: []map[string]*dynamodb.AttributeValue{
-			{
-				"id":        {S: aws.String("1")},
-				"dataType":  {S: aws.String("Title")},
-				"dataValue": {S: aws.String("Task Title")},
-			},
-			{
-				"id":        {S: aws.String("2")},
-				"dataType":  {S: aws.String("Title")},
-				"dataValue": {S: aws.String("Task Title")},
-			},
-		},
-	}, nil)
-	mockSvc.On("BatchGetItem", mock.Anything).Return(&dynamodb.BatchGetItemOutput{
-		Responses: map[string][]map[string]*dynamodb.AttributeValue{
-			"TaskManagement": {
-				{
-					"id":        {S: aws.String("1")},
-					"dataType":  {S: aws.String("Title")},
-					"dataValue": {S: aws.String("Task Title")},
-				},
-				{
-					"id":        {S: aws.String("1")},
-					"dataType":  {S: aws.String("Tags")},
-					"dataValue": {S: aws.String("Tag1")},
-				},
-				{
-					"id":        {S: aws.String("1")},
-					"dataType":  {S: aws.String("Description")},
-					"dataValue": {S: aws.String("Description of the task1")},
-				},
-				{
-					"id":        {S: aws.String("2")},
-					"dataType":  {S: aws.String("Title")},
-					"dataValue": {S: aws.String("Task Title")},
-				},
-				{
-					"id":        {S: aws.String("2")},
-					"dataType":  {S: aws.String("Tags")},
-					"dataValue": {S: aws.String("Tag2")},
-				},
-				{
-					"id":        {S: aws.String("2")},
-					"dataType":  {S: aws.String("Description")},
-					"dataValue": {S: aws.String("Description of the task2")},
-				},
-			},
-		},
-	}, nil)
-
-	svc = mockSvc
-	type args struct {
-		request events.APIGatewayProxyRequest
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    events.APIGatewayProxyResponse
-		wantErr bool
-	}{
-		{
-			name: "Valid Title",
-			args: args{
-				request: events.APIGatewayProxyRequest{
-					QueryStringParameters: map[string]string{"title": "Task Title"},
-					HTTPMethod:            "GET",
-				},
-			},
-			want: events.APIGatewayProxyResponse{
-				Body:       "[{\"id\":\"1\",\"title\":\"Task Title\",\"description\":\"Description of the task1\",\"tags\":[\"Tag1\"]},{\"id\":\"2\",\"title\":\"Task Title\",\"description\":\"Description of the task2\",\"tags\":[\"Tag2\"]}]",
-				StatusCode: http.StatusOK,
-			},
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := getTasksByTitle(tt.args.request)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("getTasksByTitle() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getTasksByTitle() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_getTasksByStatus(t *testing.T) {
-	// DynamoDBのモッククライアントを作成
-	mockSvc := &mockDynamoDBClient{}
-	mockSvc.On("Query", mock.Anything).Return(&dynamodb.QueryOutput{
-		Items: []map[string]*dynamodb.AttributeValue{
-			{
-				"id":        {S: aws.String("1")},
-				"dataType":  {S: aws.String("Status")},
-				"dataValue": {S: aws.String("Completed")},
-			},
-			{
-				"id":        {S: aws.String("2")},
-				"dataType":  {S: aws.String("Status")},
-				"dataValue": {S: aws.String("Completed")},
-			},
-		},
-	}, nil)
-	mockSvc.On("BatchGetItem", mock.Anything).Return(&dynamodb.BatchGetItemOutput{
-		Responses: map[string][]map[string]*dynamodb.AttributeValue{
-			"TaskManagement": {
-				{
-					"id":        {S: aws.String("1")},
-					"dataType":  {S: aws.String("Title")},
-					"dataValue": {S: aws.String("Task Title")},
-				},
-				{
-					"id":        {S: aws.String("1")},
-					"dataType":  {S: aws.String("Tags")},
-					"dataValue": {S: aws.String("Tag1")},
-				},
-				{
-					"id":        {S: aws.String("1")},
-					"dataType":  {S: aws.String("Description")},
-					"dataValue": {S: aws.String("Description of the task1")},
-				},
-				{
-					"id":        {S: aws.String("2")},
-					"dataType":  {S: aws.String("Title")},
-					"dataValue": {S: aws.String("Task Title")},
-				},
-				{
-					"id":        {S: aws.String("2")},
-					"dataType":  {S: aws.String("Tags")},
-					"dataValue": {S: aws.String("Tag2")},
-				},
-				{
-					"id":        {S: aws.String("2")},
-					"dataType":  {S: aws.String("Description")},
-					"dataValue": {S: aws.String("Description of the task2")},
-				},
-			},
-		},
-	}, nil)
-
-	svc = mockSvc
-
-	type args struct {
-		request events.APIGatewayProxyRequest
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    events.APIGatewayProxyResponse
-		wantErr bool
-	}{
-		{
-			name: "Valid Status",
-			args: args{
-				request: events.APIGatewayProxyRequest{
-					QueryStringParameters: map[string]string{"status": "Completed"},
-					HTTPMethod:            "GET",
-				},
-			},
-			want: events.APIGatewayProxyResponse{
-				Body:       "[{\"id\":\"1\",\"title\":\"Task Title\",\"description\":\"Description of the task1\",\"tags\":[\"Tag1\"]},{\"id\":\"2\",\"title\":\"Task Title\",\"description\":\"Description of the task2\",\"tags\":[\"Tag2\"]}]",
-				StatusCode: http.StatusOK,
-			},
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := getTasksByStatus(tt.args.request)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("getTasksByStatus() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getTasksByStatus() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func Test_getTasksByTag(t *testing.T) {
 	// DynamoDBのモッククライアントを作成
 	mockSvc := &mockDynamoDBClient{}
@@ -632,6 +445,130 @@ func Test_updateTaskAttribute(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("updateTaskAttribute() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_getTasksByAttribute(t *testing.T) {
+	// DynamoDBのモッククライアントを作成
+	mockSvc := &mockDynamoDBClient{}
+	mockSvc.On("Query", mock.Anything).Return(&dynamodb.QueryOutput{
+			Items: []map[string]*dynamodb.AttributeValue{
+					{
+							"id":        {S: aws.String("1")},
+							"dataType":  {S: aws.String("Title")},
+							"dataValue": {S: aws.String("Task Title")},
+					},
+					{
+							"id":        {S: aws.String("2")},
+							"dataType":  {S: aws.String("Title")},
+							"dataValue": {S: aws.String("Task Title")},
+					},
+					{
+							"id":        {S: aws.String("1")},
+							"dataType":  {S: aws.String("Status")},
+							"dataValue": {S: aws.String("Completed")},
+					},
+					{
+							"id":        {S: aws.String("2")},
+							"dataType":  {S: aws.String("Status")},
+							"dataValue": {S: aws.String("Completed")},
+					},
+			},
+	}, nil)
+	mockSvc.On("BatchGetItem", mock.Anything).Return(&dynamodb.BatchGetItemOutput{
+			Responses: map[string][]map[string]*dynamodb.AttributeValue{
+					"TaskManagement": {
+							{
+									"id":        {S: aws.String("1")},
+									"dataType":  {S: aws.String("Title")},
+									"dataValue": {S: aws.String("Task Title")},
+							},
+							{
+									"id":        {S: aws.String("1")},
+									"dataType":  {S: aws.String("Tags")},
+									"dataValue": {S: aws.String("Tag1")},
+							},
+							{
+									"id":        {S: aws.String("1")},
+									"dataType":  {S: aws.String("Description")},
+									"dataValue": {S: aws.String("Description of the task1")},
+							},
+							{
+									"id":        {S: aws.String("2")},
+									"dataType":  {S: aws.String("Title")},
+									"dataValue": {S: aws.String("Task Title")},
+							},
+							{
+									"id":        {S: aws.String("2")},
+									"dataType":  {S: aws.String("Tags")},
+									"dataValue": {S: aws.String("Tag2")},
+							},
+							{
+									"id":        {S: aws.String("2")},
+									"dataType":  {S: aws.String("Description")},
+									"dataValue": {S: aws.String("Description of the task2")},
+							},
+					},
+			},
+	}, nil)
+
+	svc = mockSvc
+	type args struct {
+    request        events.APIGatewayProxyRequest
+    attributeKey   string
+    attributeValue string
+	}
+	tests := []struct {
+			name    string
+			args    args
+			want    events.APIGatewayProxyResponse
+			wantErr bool
+	}{
+    {
+        name: "Valid Title",
+        args: args{
+            request: events.APIGatewayProxyRequest{
+                QueryStringParameters: map[string]string{"title": "Task Title"},
+                HTTPMethod:            "GET",
+            },
+            attributeKey:   "title",
+            attributeValue: "Task Title",
+        },
+        want: events.APIGatewayProxyResponse{
+            Body:       "[{\"id\":\"1\",\"title\":\"Task Title\",\"description\":\"Description of the task1\",\"tags\":[\"Tag1\"]},{\"id\":\"2\",\"title\":\"Task Title\",\"description\":\"Description of the task2\",\"tags\":[\"Tag2\"]}]",
+            StatusCode: http.StatusOK,
+        },
+        wantErr: false,
+    },
+    {
+			name: "Valid Status",
+			args: args{
+					request: events.APIGatewayProxyRequest{
+							QueryStringParameters: map[string]string{"status": "Completed"},
+							HTTPMethod:            "GET",
+					},
+					attributeKey:   "status",
+					attributeValue: "Completed",
+			},
+			want: events.APIGatewayProxyResponse{
+					Body:       "[{\"id\":\"1\",\"title\":\"Task Title\",\"description\":\"Description of the task1\",\"tags\":[\"Tag1\"]},{\"id\":\"2\",\"title\":\"Task Title\",\"description\":\"Description of the task2\",\"tags\":[\"Tag2\"]}]",
+					StatusCode: http.StatusOK,
+			},
+			wantErr: false,
+    },
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+				got, err := getTasksByAttribute(tt.args.request, tt.args.attributeKey, tt.args.attributeValue)
+				if (err != nil) != tt.wantErr {
+						t.Errorf("%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
+						return
+				}
+				if !reflect.DeepEqual(got, tt.want) {
+						t.Errorf("%s = %v, want %v", tt.name, got, tt.want)
 			}
 		})
 	}

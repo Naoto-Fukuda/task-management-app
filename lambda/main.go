@@ -138,20 +138,19 @@ func getTasksByTaskIds(ids []string) (map[string]*Task, error) {
 	return taskMap, nil
 }
 
-func getTasksByTitle(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	title := request.QueryStringParameters["title"]
+func getTasksByAttribute(request events.APIGatewayProxyRequest, attributeKey string, attributeValue string) (events.APIGatewayProxyResponse, error) {
+	value := request.QueryStringParameters[attributeValue]
 
-	// Titleに基づいてタスクIDを取得
 	input := &dynamodb.QueryInput{
 		TableName:              aws.String(tableName),
 		IndexName:              aws.String("GSI1"),
 		KeyConditionExpression: aws.String("dataType = :dataType AND dataValue = :dataValue"),
 		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
 			":dataType": {
-				S: aws.String("Title"),
+				S: aws.String(attributeKey),
 			},
 			":dataValue": {
-				S: aws.String(title),
+				S: aws.String(value),
 			},
 		},
 	}
@@ -181,7 +180,7 @@ func getTasksByTitle(request events.APIGatewayProxyRequest) (events.APIGatewayPr
 	if err != nil {
     return events.APIGatewayProxyResponse{
         StatusCode: http.StatusInternalServerError,
-        Body:       fmt.Sprintf("Failed to retrieve tasks by IDs: %v", err),
+        Body:       fmt.Sprintf("Failed to retrieve tasks by %v", attributeKey),
     }, nil
 	}
 
@@ -204,134 +203,69 @@ func getTasksByTitle(request events.APIGatewayProxyRequest) (events.APIGatewayPr
 	}, nil
 }
 
-	func getTasksByStatus(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-		status := request.QueryStringParameters["status"]
+func getTasksByTag(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	tag := request.QueryStringParameters["tag"]
 
-		input := &dynamodb.QueryInput{
-			TableName:              aws.String(tableName),
-			IndexName:              aws.String("GSI1"),
-			KeyConditionExpression: aws.String("dataType = :dataType AND dataValue = :dataValue"),
-			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-				":dataType": {
-					S: aws.String("Status"),
-				},
-				":dataValue": {
-					S: aws.String(status),
-				},
+	input := &dynamodb.QueryInput{
+		TableName:              aws.String(tableName),
+		IndexName:              aws.String("GSI1"),
+		KeyConditionExpression: aws.String("dataType = :dataType AND dataValue = :dataValue"),
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":dataType": {
+				S: aws.String("Tags"),
 			},
-		}
-
-			result, err := svc.Query(input)
-			if err != nil {
-				return events.APIGatewayProxyResponse{
-					StatusCode: http.StatusInternalServerError,
-					Body:       fmt.Sprintf("Query failed: %v", err),
-				}, nil
-			}
-
-			idsMap := make(map[string]bool)
-			for _, i := range result.Items {
-				id := *i["id"].S
-				if _, exists := idsMap[id]; !exists {
-					idsMap[id] = true
-				}
-			}
-
-			ids := make([]string, 0, len(idsMap))
-			for id := range idsMap {
-				ids = append(ids, id)
-			}
-
-			taskMap, err := getTasksByTaskIds(ids)
-			if err != nil {
-				return events.APIGatewayProxyResponse{
-					StatusCode: http.StatusInternalServerError,
-					Body:       fmt.Sprintf("Failed to retrieve tasks by IDs: %v", err),
-				}, nil
-			}
-
-			tasks := make([]Task, 0, len(taskMap))
-			for _, task := range taskMap {
-				tasks = append(tasks, *task)
-			}
-			
-			response, err := json.Marshal(tasks)
-			if err != nil {
-				return events.APIGatewayProxyResponse{
-					StatusCode: http.StatusInternalServerError,
-					Body:       fmt.Sprintf("Failed to marshal response: %v", err),
-				}, nil
-			}
-
-			return events.APIGatewayProxyResponse{
-				StatusCode: http.StatusOK,
-				Body:       string(response),
-			}, nil
+			":dataValue": {
+				S: aws.String(tag),
+			},
+		},
 	}
 
-	func getTasksByTag(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-		tag := request.QueryStringParameters["tag"]
-
-		input := &dynamodb.QueryInput{
-			TableName:              aws.String(tableName),
-			IndexName:              aws.String("GSI1"),
-			KeyConditionExpression: aws.String("dataType = :dataType AND dataValue = :dataValue"),
-			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-				":dataType": {
-					S: aws.String("Tags"),
-				},
-				":dataValue": {
-					S: aws.String(tag),
-				},
-			},
-		}
-
-		result, err := svc.Query(input)
-		if err != nil {
-			return events.APIGatewayProxyResponse{
-				StatusCode: http.StatusInternalServerError,
-				Body:       fmt.Sprintf("Query failed: %v", err),
-			}, nil
-		}
-
-		idsMap := make(map[string]bool)
-		for _, i := range result.Items {
-			id := *i["id"].S
-			if _, exists := idsMap[id]; !exists {
-				idsMap[id] = true
-			}
-		}
-
-		ids := make([]string, 0, len(idsMap))
-		for id := range idsMap {
-			ids = append(ids, id)
-		}
-
-		taskMap, err := getTasksByTaskIds(ids)
-		if err != nil {
-			return events.APIGatewayProxyResponse{
-				StatusCode: http.StatusInternalServerError,
-				Body:       fmt.Sprintf("Failed to retrieve tasks by IDs: %v", err),
-			}, nil
-		}
-
-		tasks := make([]Task, 0, len(taskMap))
-		for _, task := range taskMap {
-			tasks = append(tasks, *task)
-		}
-
-		response, err := json.Marshal(tasks)
-		if err != nil {
-			return events.APIGatewayProxyResponse{
-				StatusCode: http.StatusInternalServerError,
-				Body:       fmt.Sprintf("Failed to marshal response: %v", err),
-			}, nil
-		}
-
+	result, err := svc.Query(input)
+	if err != nil {
 		return events.APIGatewayProxyResponse{
-			StatusCode: http.StatusOK,
-			Body:       string(response),
+			StatusCode: http.StatusInternalServerError,
+			Body:       fmt.Sprintf("Query failed: %v", err),
 		}, nil
+	}
+
+	idsMap := make(map[string]bool)
+	for _, i := range result.Items {
+		id := *i["id"].S
+		if _, exists := idsMap[id]; !exists {
+			idsMap[id] = true
+		}
+	}
+
+	ids := make([]string, 0, len(idsMap))
+	for id := range idsMap {
+		ids = append(ids, id)
+	}
+
+	taskMap, err := getTasksByTaskIds(ids)
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			StatusCode: http.StatusInternalServerError,
+			Body:       fmt.Sprintf("Failed to retrieve tasks by IDs: %v", err),
+		}, nil
+	}
+
+	tasks := make([]Task, 0, len(taskMap))
+	for _, task := range taskMap {
+		tasks = append(tasks, *task)
+	}
+
+	response, err := json.Marshal(tasks)
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			StatusCode: http.StatusInternalServerError,
+			Body:       fmt.Sprintf("Failed to marshal response: %v", err),
+		}, nil
+	}
+
+	return events.APIGatewayProxyResponse{
+		StatusCode: http.StatusOK,
+		Body:       string(response),
+	}, nil
 }
 
 func createTask(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
