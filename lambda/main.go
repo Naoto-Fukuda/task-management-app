@@ -17,8 +17,6 @@ import (
 
 var (
 	tableName = "TaskManagement"
-	// svc  = mockDynamoDBClient{}
-	// svc       *dynamodb.DynamoDB
 	svc       dynamodbiface.DynamoDBAPI
 )
 
@@ -94,9 +92,6 @@ func getTaskById(id string) (events.APIGatewayProxyResponse, error) {
 	}, nil
 }
 
-// TODO:ButchGetについて整理する
-// あと、responseがmapなのでそれの扱い方を再度確認する
-//　keyで取得するとか更新するとか
 func getTasksByTaskIds(ids []string) (map[string]*Task, error) {
 	keys := make([]map[string]*dynamodb.AttributeValue, len(ids))
 	for i, id := range ids {
@@ -434,11 +429,107 @@ func addTagToTask(request events.APIGatewayProxyRequest) (events.APIGatewayProxy
 	}, nil
 }
 
-// updateは共通関数で引数を変えるだけでいけるかも?
-// func updateTagOnTask
-// updateTitleOnTask
-// updateDescriptionOnTask
-// func deleteTaskById
+func deleteTaskById(id string) (response events.APIGatewayProxyResponse, err error) {
+	input := &dynamodb.DeleteItemInput{
+		TableName: aws.String(tableName),
+		Key: map[string]*dynamodb.AttributeValue{
+			"id": {
+				S: aws.String(id),
+			},
+		},
+	}
+
+	_, err = svc.DeleteItem(input)
+	if err != nil {
+		response = events.APIGatewayProxyResponse{
+			StatusCode: http.StatusInternalServerError,
+			Body:       fmt.Sprintf("Failed to delete task: %v", err),
+		}
+		return
+	}
+
+	response = events.APIGatewayProxyResponse{
+		StatusCode: http.StatusOK,
+		Body:       "Task deleted successfully",
+	}
+	return
+}
+
+func updateTagOnTask(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	taskId := request.QueryStringParameters["id"]
+	old_tag := request.QueryStringParameters["old_tag"]
+	new_tag := request.QueryStringParameters["new_tag"]
+
+	input := &dynamodb.UpdateItemInput{
+		TableName: aws.String(tableName),
+		Key: map[string]*dynamodb.AttributeValue{
+			"id": {
+				S: aws.String(taskId),
+			},
+			"DataType": {
+				S: aws.String("Tags"),
+			},
+		},
+		UpdateExpression: aws.String("DELETE dataValue :old_tag ADD dataValue :new_tag"),
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":old_tag": {
+				SS: []*string{aws.String(old_tag)},
+			},
+			":new_tag": {
+				SS: []*string{aws.String(new_tag)},
+			},
+		},
+	}
+
+	_, err := svc.UpdateItem(input)
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			StatusCode: http.StatusInternalServerError,
+			Body:       fmt.Sprintf("Failed to update tag on task: %v", err),
+		}, nil
+	}
+
+	return events.APIGatewayProxyResponse{
+		StatusCode: http.StatusOK,
+		Body:       "Tag updated on task successfully",
+	}, nil
+}
+
+func updateTaskAttribute(request events.APIGatewayProxyRequest, attributeKey string, attributeValue string) (events.APIGatewayProxyResponse, error) {
+	taskId := request.QueryStringParameters["id"]
+	newValue := request.QueryStringParameters[attributeValue]
+
+	input := &dynamodb.UpdateItemInput{
+		TableName: aws.String(tableName),
+		Key: map[string]*dynamodb.AttributeValue{
+			"id": {
+				S: aws.String(taskId),
+			},
+			"DataType": {
+				S: aws.String(attributeKey),
+			},
+		},
+		UpdateExpression: aws.String("SET dataValue = :new_value"),
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":new_value": {
+				S: aws.String(newValue),
+			},
+		},
+	}
+
+	_, err := svc.UpdateItem(input)
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			StatusCode: http.StatusInternalServerError,
+			Body:       fmt.Sprintf("Failed to update %s on task: %v", attributeKey, err),
+		}, nil
+	}
+
+	return events.APIGatewayProxyResponse{
+		StatusCode: http.StatusOK,
+		Body:       fmt.Sprintf("%s updated on task successfully", attributeKey),
+	}, nil
+}
 
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	method := request.HTTPMethod

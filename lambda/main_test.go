@@ -30,6 +30,12 @@ func (m *mockDynamoDBClient) GetItem(input *dynamodb.GetItemInput) (*dynamodb.Ge
 	return args.Get(0).(*dynamodb.GetItemOutput), args.Error(1)
 }
 
+// DeleteItemのモック実装
+func (m *mockDynamoDBClient) DeleteItem(input *dynamodb.DeleteItemInput) (*dynamodb.DeleteItemOutput, error) {
+	args := m.Called(input)
+	return args.Get(0).(*dynamodb.DeleteItemOutput), args.Error(1)
+}
+
 // Queryのモック実装
 func (m *mockDynamoDBClient) Query(input *dynamodb.QueryInput) (*dynamodb.QueryOutput, error) {
 	args := m.Called(input)
@@ -268,49 +274,6 @@ func Test_getTasksByTitle(t *testing.T) {
 	}
 }
 
-// func Test_retrieveTasksByIds(t *testing.T) {
-// 	mockSvc := &mockDynamoDBClient{}
-// 	mockSvc.On("BatchGetItem", mock.Anything).Return(&dynamodb.QueryOutput{
-// 		Items: []map[string]*dynamodb.AttributeValue{
-// 			{
-// 				"id":        {S: aws.String("1")},
-// 				"dataType":  {S: aws.String("Title")},
-// 				"dataValue": {S: aws.String("Task Title")},
-// 			},
-// 			{
-// 				"id":        {S: aws.String("1")},
-// 				"dataType":  {S: aws.String("Description")},
-// 				"dataValue": {S: aws.String("Description of the task")},
-// 			},
-// 		},
-// 	}, nil)
-
-// 	svc = mockSvc
-// 	type args struct {
-// 		ids []string
-// 	}
-// 	tests := []struct {
-// 		name    string
-// 		args    args
-// 		want    map[string]*Task
-// 		wantErr bool
-// 	}{
-// 		// TODO: Add test cases.
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			got, err := retrieveTasksByIds(tt.args.ids)
-// 			if (err != nil) != tt.wantErr {
-// 				t.Errorf("retrieveTasksByIds() error = %v, wantErr %v", err, tt.wantErr)
-// 				return
-// 			}
-// 			if !reflect.DeepEqual(got, tt.want) {
-// 				t.Errorf("retrieveTasksByIds() = %v, want %v", got, tt.want)
-// 			}
-// 		})
-// 	}
-// }
-
 func Test_getTasksByStatus(t *testing.T) {
 	// DynamoDBのモッククライアントを作成
 	mockSvc := &mockDynamoDBClient{}
@@ -538,6 +501,137 @@ func Test_addTagToTask(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("addTagToTask() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_deleteTaskById(t *testing.T) {
+	// DynamoDBのモッククライアントを作成
+	mockSvc := &mockDynamoDBClient{}
+	mockSvc.On("DeleteItem", mock.Anything).Return(&dynamodb.DeleteItemOutput{}, nil)
+
+	svc = mockSvc
+	type args struct {
+		id string
+	}
+	tests := []struct {
+		name         string
+		args         args
+		wantResponse events.APIGatewayProxyResponse
+		wantErr      bool
+	}{
+		{
+			name: "Valid ID",
+			args: args{
+				id: "1",
+			},
+			wantResponse: events.APIGatewayProxyResponse{
+				Body:       "Task deleted successfully",
+				StatusCode: http.StatusOK,
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotResponse, err := deleteTaskById(tt.args.id)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("deleteTaskById() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotResponse, tt.wantResponse) {
+				t.Errorf("deleteTaskById() = %v, want %v", gotResponse, tt.wantResponse)
+			}
+		})
+	}
+}
+
+func Test_updateTagOnTask(t *testing.T) {
+	mockSvc := &mockDynamoDBClient{}
+	mockSvc.On("UpdateItem", mock.Anything).Return(&dynamodb.UpdateItemOutput{}, nil)
+
+	svc = mockSvc
+	type args struct {
+		request events.APIGatewayProxyRequest
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    events.APIGatewayProxyResponse
+		wantErr bool
+	}{
+		{
+			name: "Valid Request",
+			args: args{
+				request: events.APIGatewayProxyRequest{
+					Body:       "{\"id\":\"1\", \"oldTag\":\"Tag1\", \"newTag\":\"Tag2\"}",
+					HTTPMethod: "PUT",
+				},
+			},
+			want: events.APIGatewayProxyResponse{
+				Body:       "Tag updated on task successfully",
+				StatusCode: http.StatusOK,
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := updateTagOnTask(tt.args.request)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("updateTagOnTask() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("updateTagOnTask() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_updateTaskAttribute(t *testing.T) {
+	mockSvc := &mockDynamoDBClient{}
+	mockSvc.On("UpdateItem", mock.Anything).Return(&dynamodb.UpdateItemOutput{}, nil)
+
+	svc = mockSvc
+	type args struct {
+		request        events.APIGatewayProxyRequest
+		attributeKey   string
+		attributeValue string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    events.APIGatewayProxyResponse
+		wantErr bool
+	}{
+		{
+			name: "Valid Request",
+			args: args{
+				request: events.APIGatewayProxyRequest{
+					Body:       "{\"id\":\"1\", \"attributeValue\":\"Completed\"}",
+					HTTPMethod: "PUT",
+				},
+				attributeKey:   "Status",
+				attributeValue: "Completed",
+			},
+			want: events.APIGatewayProxyResponse{
+				Body:       "Status updated on task successfully",
+				StatusCode: http.StatusOK,
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := updateTaskAttribute(tt.args.request, tt.args.attributeKey, tt.args.attributeValue)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("updateTaskAttribute() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("updateTaskAttribute() = %v, want %v", got, tt.want)
 			}
 		})
 	}
