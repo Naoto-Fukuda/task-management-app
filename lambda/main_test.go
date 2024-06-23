@@ -4,54 +4,26 @@ import (
 	"net/http"
 	"reflect"
 	"testing"
+	"task-management-app/lambda/task"
+	"task-management-app/lambda/mocks"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
-	"github.com/stretchr/testify/mock"
+	"github.com/golang/mock/gomock"
 )
 
 // DynamoDBAPIのモック定義
 type mockDynamoDBClient struct {
 	dynamodbiface.DynamoDBAPI
-	mock.Mock
+	ctrl *gomock.Controller
 }
 
-// PutItemのモック実装
-func (m *mockDynamoDBClient) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
-	args := m.Called(input)
-	return args.Get(0).(*dynamodb.PutItemOutput), args.Error(1)
-}
-
-// GetItemのモック実装
-func (m *mockDynamoDBClient) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
-	args := m.Called(input)
-	return args.Get(0).(*dynamodb.GetItemOutput), args.Error(1)
-}
-
-// DeleteItemのモック実装
-func (m *mockDynamoDBClient) DeleteItem(input *dynamodb.DeleteItemInput) (*dynamodb.DeleteItemOutput, error) {
-	args := m.Called(input)
-	return args.Get(0).(*dynamodb.DeleteItemOutput), args.Error(1)
-}
-
-// Queryのモック実装
-func (m *mockDynamoDBClient) Query(input *dynamodb.QueryInput) (*dynamodb.QueryOutput, error) {
-	args := m.Called(input)
-	return args.Get(0).(*dynamodb.QueryOutput), args.Error(1)
-}
-
-// BatchGetItemのモック実装
-func (m *mockDynamoDBClient) BatchGetItem(input *dynamodb.BatchGetItemInput) (*dynamodb.BatchGetItemOutput, error) {
-	args := m.Called(input)
-	return args.Get(0).(*dynamodb.BatchGetItemOutput), args.Error(1)
-}
-
-// UpdateItemのモック実装
-func (m *mockDynamoDBClient) UpdateItem(input *dynamodb.UpdateItemInput) (*dynamodb.UpdateItemOutput, error) {
-	args := m.Called(input)
-	return args.Get(0).(*dynamodb.UpdateItemOutput), args.Error(1)
+// モックオブジェクトの生成
+func newMockDynamoDBClient(ctrl *gomock.Controller) *mockDynamoDBClient {
+	mock := &mockDynamoDBClient{ctrl: ctrl}
+	return mock
 }
 
 // func setup() {
@@ -67,11 +39,14 @@ func (m *mockDynamoDBClient) UpdateItem(input *dynamodb.UpdateItemInput) (*dynam
 // }
 
 func Test_createTask(t *testing.T) {
-	// DynamoDBのモッククライアントを作成
-	mockSvc := &mockDynamoDBClient{}
-	mockSvc.On("PutItem", mock.Anything).Return(&dynamodb.PutItemOutput{}, nil)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	svc = mockSvc
+	// DynamoDBのモッククライアントを作成
+	mockDynamoDB := mockdb.NewMockDynamoDBAPI(ctrl)
+	mockDynamoDB.EXPECT().PutItem(gomock.Any()).Return(&dynamodb.PutItemOutput{}, nil).Times(1)
+
+	task.Svc = mockDynamoDB
 
 	type args struct {
 		request events.APIGatewayProxyRequest
@@ -99,7 +74,7 @@ func Test_createTask(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := createTask(tt.args.request)
+			got, err := task.CreateTask(tt.args.request)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("createTask() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -111,10 +86,14 @@ func Test_createTask(t *testing.T) {
 	}
 }
 
-func Test_getTaskById(t *testing.T) {
+func Test_GetTaskById(t *testing.T) {
 	// DynamoDBのモッククライアントを作成
-	mockSvc := &mockDynamoDBClient{}
-	mockSvc.On("Query", mock.Anything).Return(&dynamodb.QueryOutput{
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// DynamoDBのモッククライアントを作成
+	mockDynamoDB := mockdb.NewMockDynamoDBAPI(ctrl)
+	mockDynamoDB.EXPECT().Query(gomock.Any()).Return(&dynamodb.QueryOutput{
 		Items: []map[string]*dynamodb.AttributeValue{
 			{
 				"id":        {S: aws.String("1")},
@@ -137,9 +116,9 @@ func Test_getTaskById(t *testing.T) {
 				"dataValue": {S: aws.String("Description of the task2")},
 			},
 		},
-	}, nil)
+	}, nil).Times(1) // 期待される呼び出し回数を指定
 
-	svc = mockSvc
+	task.Svc = mockDynamoDB
 
 	type args struct {
 		request events.APIGatewayProxyRequest
@@ -169,7 +148,7 @@ func Test_getTaskById(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			taskID := tt.args.request.QueryStringParameters["id"]
-			got, err := getTaskById(taskID)
+			got, err := task.GetTaskById(taskID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("getTasksById() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -183,8 +162,11 @@ func Test_getTaskById(t *testing.T) {
 
 func Test_getTasksByTag(t *testing.T) {
 	// DynamoDBのモッククライアントを作成
-	mockSvc := &mockDynamoDBClient{}
-	mockSvc.On("Query", mock.Anything).Return(&dynamodb.QueryOutput{
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockDynamoDB := mockdb.NewMockDynamoDBAPI(ctrl)
+	mockDynamoDB.EXPECT().Query(gomock.Any()).Return(&dynamodb.QueryOutput{
 		Items: []map[string]*dynamodb.AttributeValue{
 			{
 				"id":        {S: aws.String("1")},
@@ -197,9 +179,9 @@ func Test_getTasksByTag(t *testing.T) {
 				"dataValue": {S: aws.String("Tag1")},
 			},
 		},
-	}, nil)
+	}, nil).Times(1)
 
-	mockSvc.On("BatchGetItem", mock.Anything).Return(&dynamodb.BatchGetItemOutput{
+	mockDynamoDB.EXPECT().BatchGetItem(gomock.Any()).Return(&dynamodb.BatchGetItemOutput{
 		Responses: map[string][]map[string]*dynamodb.AttributeValue{
 			"TaskManagement": {
 				{
@@ -234,9 +216,10 @@ func Test_getTasksByTag(t *testing.T) {
 				},
 			},
 		},
-	}, nil)
+	}, nil).Times(1)
 
-	svc = mockSvc
+	task.Svc = mockDynamoDB
+
 	type args struct {
 		request events.APIGatewayProxyRequest
 	}
@@ -263,7 +246,7 @@ func Test_getTasksByTag(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getTasksByTag(tt.args.request)
+			got, err := task.GetTasksByTag(tt.args.request)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("getTasksByTag() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -277,10 +260,13 @@ func Test_getTasksByTag(t *testing.T) {
 
 func Test_addTagToTask(t *testing.T) {
 	// DynamoDBのモッククライアントを作成
-	mockSvc := &mockDynamoDBClient{}
-	mockSvc.On("UpdateItem", mock.Anything).Return(&dynamodb.UpdateItemOutput{}, nil)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	svc = mockSvc
+	mockDynamoDB := mockdb.NewMockDynamoDBAPI(ctrl)
+	mockDynamoDB.EXPECT().UpdateItem(gomock.Any()).Return(&dynamodb.UpdateItemOutput{}, nil).Times(1)
+
+	task.Svc = mockDynamoDB
 	type args struct {
 		request events.APIGatewayProxyRequest
 	}
@@ -307,7 +293,7 @@ func Test_addTagToTask(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := addTagToTask(tt.args.request)
+			got, err := task.AddTagToTask(tt.args.request)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("addTagToTask() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -321,10 +307,14 @@ func Test_addTagToTask(t *testing.T) {
 
 func Test_deleteTaskById(t *testing.T) {
 	// DynamoDBのモッククライアントを作成
-	mockSvc := &mockDynamoDBClient{}
-	mockSvc.On("DeleteItem", mock.Anything).Return(&dynamodb.DeleteItemOutput{}, nil)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockDynamoDB := mockdb.NewMockDynamoDBAPI(ctrl)
+	task.Svc = mockDynamoDB
 
-	svc = mockSvc
+	// DeleteItemの期待される呼び出しを設定
+	mockDynamoDB.EXPECT().DeleteItem(gomock.Any()).Return(&dynamodb.DeleteItemOutput{}, nil).Times(1)
+
 	type args struct {
 		id string
 	}
@@ -348,7 +338,7 @@ func Test_deleteTaskById(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotResponse, err := deleteTaskById(tt.args.id)
+			gotResponse, err := task.DeleteTaskById(tt.args.id)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("deleteTaskById() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -361,10 +351,13 @@ func Test_deleteTaskById(t *testing.T) {
 }
 
 func Test_updateTagOnTask(t *testing.T) {
-	mockSvc := &mockDynamoDBClient{}
-	mockSvc.On("UpdateItem", mock.Anything).Return(&dynamodb.UpdateItemOutput{}, nil)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	svc = mockSvc
+	mockDynamoDB := mockdb.NewMockDynamoDBAPI(ctrl)
+	task.Svc = mockDynamoDB
+	mockDynamoDB.EXPECT().UpdateItem(gomock.Any()).Return(&dynamodb.UpdateItemOutput{}, nil).Times(1)
+
 	type args struct {
 		request events.APIGatewayProxyRequest
 	}
@@ -391,7 +384,7 @@ func Test_updateTagOnTask(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := updateTagOnTask(tt.args.request)
+			got, err := task.UpdateTagOnTask(tt.args.request)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("updateTagOnTask() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -404,10 +397,13 @@ func Test_updateTagOnTask(t *testing.T) {
 }
 
 func Test_updateTaskAttribute(t *testing.T) {
-	mockSvc := &mockDynamoDBClient{}
-	mockSvc.On("UpdateItem", mock.Anything).Return(&dynamodb.UpdateItemOutput{}, nil)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	svc = mockSvc
+	mockDynamoDB := mockdb.NewMockDynamoDBAPI(ctrl)
+	mockDynamoDB.EXPECT().UpdateItem(gomock.Any()).Return(&dynamodb.UpdateItemOutput{}, nil).Times(1)
+
+	task.Svc = mockDynamoDB
 	type args struct {
 		request        events.APIGatewayProxyRequest
 		attributeKey   string
@@ -438,7 +434,7 @@ func Test_updateTaskAttribute(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := updateTaskAttribute(tt.args.request, tt.args.attributeKey, tt.args.attributeValue)
+			got, err := task.UpdateTaskAttribute(tt.args.request, tt.args.attributeKey, tt.args.attributeValue)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("updateTaskAttribute() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -451,124 +447,111 @@ func Test_updateTaskAttribute(t *testing.T) {
 }
 
 func Test_getTasksByAttribute(t *testing.T) {
-	// DynamoDBのモッククライアントを作成
-	mockSvc := &mockDynamoDBClient{}
-	mockSvc.On("Query", mock.Anything).Return(&dynamodb.QueryOutput{
-			Items: []map[string]*dynamodb.AttributeValue{
-					{
-							"id":        {S: aws.String("1")},
-							"dataType":  {S: aws.String("Title")},
-							"dataValue": {S: aws.String("Task Title")},
-					},
-					{
-							"id":        {S: aws.String("2")},
-							"dataType":  {S: aws.String("Title")},
-							"dataValue": {S: aws.String("Task Title")},
-					},
-					{
-							"id":        {S: aws.String("1")},
-							"dataType":  {S: aws.String("Status")},
-							"dataValue": {S: aws.String("Completed")},
-					},
-					{
-							"id":        {S: aws.String("2")},
-							"dataType":  {S: aws.String("Status")},
-							"dataValue": {S: aws.String("Completed")},
-					},
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockDynamoDB := mockdb.NewMockDynamoDBAPI(ctrl)
+	task.Svc = mockDynamoDB
+
+	// Queryの期待される呼び出しを設定（引数を具体的に指定）
+	mockDynamoDB.EXPECT().Query(&dynamodb.QueryInput{
+    ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+        ":dataValue": {S: aws.String("Task Title")},
+        ":dataType": {S: aws.String("Title")},
+    },
+    IndexName: aws.String("GSI1"),
+    KeyConditionExpression: aws.String("dataType = :dataType AND dataValue = :dataValue"),
+    TableName: aws.String("TaskManagement"),
+}).Return(&dynamodb.QueryOutput{
+    Items: []map[string]*dynamodb.AttributeValue{
+        {
+            "id":        {S: aws.String("1")},
+            "dataType":  {S: aws.String("Title")},
+            "dataValue": {S: aws.String("Task Title")},
+        },
+        {
+            "id":        {S: aws.String("2")},
+            "dataType":  {S: aws.String("Title")},
+            "dataValue": {S: aws.String("Task Title")},
+        },
+    },
+}, nil)
+
+
+	mockDynamoDB.EXPECT().BatchGetItem(gomock.Any()).Return(&dynamodb.BatchGetItemOutput{
+		Responses: map[string][]map[string]*dynamodb.AttributeValue{
+			"TaskManagement": {
+				{
+					"id":        {S: aws.String("1")},
+					"dataType":  {S: aws.String("Title")},
+					"dataValue": {S: aws.String("Task Title")},
+				},
+				{
+					"id":        {S: aws.String("1")},
+					"dataType":  {S: aws.String("Tags")},
+					"dataValue": {S: aws.String("Tag1")},
+				},
+				{
+					"id":        {S: aws.String("1")},
+					"dataType":  {S: aws.String("Description")},
+					"dataValue": {S: aws.String("Description of the task1")},
 			},
-	}, nil)
-	mockSvc.On("BatchGetItem", mock.Anything).Return(&dynamodb.BatchGetItemOutput{
-			Responses: map[string][]map[string]*dynamodb.AttributeValue{
-					"TaskManagement": {
-							{
-									"id":        {S: aws.String("1")},
-									"dataType":  {S: aws.String("Title")},
-									"dataValue": {S: aws.String("Task Title")},
-							},
-							{
-									"id":        {S: aws.String("1")},
-									"dataType":  {S: aws.String("Tags")},
-									"dataValue": {S: aws.String("Tag1")},
-							},
-							{
-									"id":        {S: aws.String("1")},
-									"dataType":  {S: aws.String("Description")},
-									"dataValue": {S: aws.String("Description of the task1")},
-							},
-							{
-									"id":        {S: aws.String("2")},
-									"dataType":  {S: aws.String("Title")},
-									"dataValue": {S: aws.String("Task Title")},
-							},
-							{
-									"id":        {S: aws.String("2")},
-									"dataType":  {S: aws.String("Tags")},
-									"dataValue": {S: aws.String("Tag2")},
-							},
-							{
-									"id":        {S: aws.String("2")},
-									"dataType":  {S: aws.String("Description")},
-									"dataValue": {S: aws.String("Description of the task2")},
-							},
-					},
+			{
+					"id":        {S: aws.String("2")},
+					"dataType":  {S: aws.String("Title")},
+					"dataValue": {S: aws.String("Task Title")},
 			},
+			{
+					"id":        {S: aws.String("2")},
+					"dataType":  {S: aws.String("Tags")},
+					"dataValue": {S: aws.String("Tag2")},
+			},
+			{
+					"id":        {S: aws.String("2")},
+					"dataType":  {S: aws.String("Description")},
+					"dataValue": {S: aws.String("Description of the task2")},
+			},
+			},
+		},
 	}, nil)
 
-	svc = mockSvc
 	type args struct {
-    request        events.APIGatewayProxyRequest
-    attributeKey   string
-    attributeValue string
+		request        events.APIGatewayProxyRequest
+		attributeKey   string
+		attributeValue string
 	}
 	tests := []struct {
-			name    string
-			args    args
-			want    events.APIGatewayProxyResponse
-			wantErr bool
+		name    string
+		args    args
+		want    events.APIGatewayProxyResponse
+		wantErr bool
 	}{
-    {
-        name: "Valid Title",
-        args: args{
-            request: events.APIGatewayProxyRequest{
-                QueryStringParameters: map[string]string{"title": "Task Title"},
-                HTTPMethod:            "GET",
-            },
-            attributeKey:   "title",
-            attributeValue: "Task Title",
-        },
-        want: events.APIGatewayProxyResponse{
-            Body:       "[{\"id\":\"1\",\"title\":\"Task Title\",\"description\":\"Description of the task1\",\"tags\":[\"Tag1\"]},{\"id\":\"2\",\"title\":\"Task Title\",\"description\":\"Description of the task2\",\"tags\":[\"Tag2\"]}]",
-            StatusCode: http.StatusOK,
-        },
-        wantErr: false,
-    },
-    {
-			name: "Valid Status",
+		{
+			name: "Valid Title",
 			args: args{
-					request: events.APIGatewayProxyRequest{
-							QueryStringParameters: map[string]string{"status": "Completed"},
-							HTTPMethod:            "GET",
-					},
-					attributeKey:   "status",
-					attributeValue: "Completed",
+				request: events.APIGatewayProxyRequest{
+					QueryStringParameters: map[string]string{"Title": "Task Title"},
+					HTTPMethod:            "GET",
+				},
+				attributeKey:   "Title",
+				attributeValue: "Task Title",
 			},
 			want: events.APIGatewayProxyResponse{
-					Body:       "[{\"id\":\"1\",\"title\":\"Task Title\",\"description\":\"Description of the task1\",\"tags\":[\"Tag1\"]},{\"id\":\"2\",\"title\":\"Task Title\",\"description\":\"Description of the task2\",\"tags\":[\"Tag2\"]}]",
-					StatusCode: http.StatusOK,
+				Body:       "[{\"id\":\"1\",\"title\":\"Task Title\",\"description\":\"Description of the task1\",\"tags\":[\"Tag1\"]},{\"id\":\"2\",\"title\":\"Task Title\",\"description\":\"Description of the task2\",\"tags\":[\"Tag2\"]}]",
+				StatusCode: http.StatusOK,
 			},
 			wantErr: false,
-    },
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-				got, err := getTasksByAttribute(tt.args.request, tt.args.attributeKey, tt.args.attributeValue)
-				if (err != nil) != tt.wantErr {
-						t.Errorf("%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
-						return
-				}
-				if !reflect.DeepEqual(got, tt.want) {
-						t.Errorf("%s = %v, want %v", tt.name, got, tt.want)
+			got, err := task.GetTasksByAttribute(tt.args.request, tt.args.attributeKey, tt.args.attributeValue)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("%s = %v, want %v", tt.name, got, tt.want)
 			}
 		})
 	}
